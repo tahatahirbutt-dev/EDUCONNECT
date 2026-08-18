@@ -1,0 +1,176 @@
+@page "/student/enroll"
+@namespace EduConnect.Pages.StudentPages
+@using EduConnect.Services
+@using EduConnect.Interfaces
+@using EduConnect.Models
+@using EduConnect.Enums
+@using EduConnect.Exceptions
+@using EduConnect.Components
+@inject AuthStateService AuthService
+@inject ICourseService CourseService
+@inject INotificationService NotificationService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Enroll in Courses — EduConnect</PageTitle>
+
+@if (!AuthService.IsInRole(UserRole.Student)) { Nav.NavigateTo("/unauthorized"); return; }
+
+<div class="mb-4">
+    <h2 class="fw-bold mb-0"><i class="bi bi-plus-circle-fill me-2 text-success"></i>Course Enrollment</h2>
+    <p class="text-muted small">Browse available courses and enroll</p>
+</div>
+
+<AlertBox Message="@_successMsg" Type="AlertType.Success" OnDismissed="@(() => _successMsg = string.Empty)" />
+<AlertBox Message="@_errorMsg"   Type="AlertType.Error"   OnDismissed="@(() => _errorMsg = string.Empty)" />
+
+@if (_student is not null)
+{
+    <!-- Enrolled Courses Summary -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-primary text-white fw-semibold">
+            <i class="bi bi-journal-check me-2"></i>Currently Enrolled
+            <span class="badge bg-light text-dark ms-2">@_activeEnrollments.Count courses</span>
+        </div>
+        @if (!_activeEnrollments.Any())
+        {
+            <div class="card-body text-muted">You are not enrolled in any courses yet.</div>
+        }
+        else
+        {
+            <ul class="list-group list-group-flush">
+                @foreach (var e in _activeEnrollments)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge bg-secondary me-2">@e.CourseCode</span>
+                            @e.CourseTitle
+                            <small class="text-muted ms-2">(@e.CourseCreditHours cr)</small>
+                        </div>
+                        <!-- Drop Course button — only if status is Active -->
+                        <button class="btn btn-sm btn-outline-danger"
+                                @onclick="() => PromptDrop(e)">
+                            <i class="bi bi-x-circle me-1"></i>Drop
+                        </button>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+
+    <!-- Available Courses as Cards -->
+    <h5 class="fw-semibold mb-3">Available Courses</h5>
+    <div class="row g-3">
+        @foreach (var course in _availableCourses)
+        {
+            bool alreadyEnrolled = _activeEnrollments.Any(e => e.CourseId == course.Id);
+            <div class="col-md-6 col-lg-4">
+                <div class="position-relative">
+                    @if (alreadyEnrolled)
+                    {
+                        <div class="position-absolute top-0 end-0 m-2 z-1">
+                            <span class="badge bg-success"><i class="bi bi-check-lg me-1"></i>Enrolled</span>
+                        </div>
+                    }
+                    <!-- CourseCard: OnEnroll EventCallback<Course> — parent handles service call -->
+                    <CourseCard Course="@course"
+                                ShowEnrollButton="@(!alreadyEnrolled)"
+                                OnEnroll="HandleEnroll" />
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<!-- Drop confirmation dialog -->
+<ConfirmDialog Title="Drop Course"
+               Message="@($"Drop '{_enrollmentToDrop?.CourseTitle}'? You cannot re-enroll this semester.")"
+               IsVisible="_showDropConfirm"
+               OnConfirmed="ConfirmDrop"
+               OnCancelled="() => _showDropConfirm = false" />
+
+@code {
+    private EduConnect.Models.Student? _student;
+    private List<Course> _availableCourses = new();
+    private List<Enrollment> _activeEnrollments = new();
+    private string _successMsg = string.Empty;
+    private string _errorMsg   = string.Empty;
+    private bool _showDropConfirm = false;
+    private Enrollment? _enrollmentToDrop;
+
+    protected override void OnInitialized()
+    {
+        _student = AuthService.CurrentUser as EduConnect.Models.Student;
+        if (_student is null) { Nav.NavigateTo("/unauthorized"); return; }
+        Refresh();
+    }
+
+    private void Refresh()
+    {
+        _availableCourses  = CourseService.GetAvailableCourses(_student!.Id).ToList();
+        _activeEnrollments = _student.Enrollments
+            .Where(e => e.Status == CourseEnrollmentActiveStatus.Active).ToList();
+    }
+
+    // EventCallback handler: called by CourseCard when Enroll button is clicked
+    // Parent handles the service call — not the child component (SRP)
+    private void HandleEnroll(Course course)
+    {
+        _errorMsg = _successMsg = string.Empty;
+        try
+        {
+            CourseService.EnrollStudent(_student!, course);
+
+            // Fire enrollment notification
+            NotificationService.SendNotification(new Notification
+            {
+                UserId  = _student!.Id,
+                Message = $"You enrolled in {course.Code} — {course.Title}.",
+                Type    = NotificationType.Enrollment
+            });
+
+            _successMsg = $"Successfully enrolled in {course.Code} — {course.Title}!";
+            Refresh();
+        }
+        catch (CourseFullException ex)
+        {
+            // Caught here — alert shown, not crash
+            _errorMsg = ex.Message;
+        }
+        catch (AlreadyDroppedCourseException ex)
+        {
+            _errorMsg = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _errorMsg = ex.Message;
+        }
+    }
+
+    private void PromptDrop(Enrollment enrollment)
+    {
+        _enrollmentToDrop = enrollment;
+        _showDropConfirm  = true;
+    }
+
+    private void ConfirmDrop()
+    {
+        _showDropConfirm = false;
+        if (_enrollmentToDrop is null || _student is null) return;
+
+        var course = CourseService.GetById(_enrollmentToDrop.CourseId);
+        if (course is null) return;
+
+        try
+        {
+            CourseService.DropCourse(_student, course);
+            _successMsg = $"Dropped {_enrollmentToDrop.CourseCode} — {_enrollmentToDrop.CourseTitle}.";
+            _enrollmentToDrop = null;
+            Refresh();
+        }
+        catch (Exception ex)
+        {
+            _errorMsg = ex.Message;
+        }
+    }
+}

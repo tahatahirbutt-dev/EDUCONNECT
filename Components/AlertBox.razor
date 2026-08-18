@@ -1,0 +1,47 @@
+@using EduConnect.Enums
+
+<!-- AlertBox.razor — Reusable Bootstrap alert component -->
+<!-- Used everywhere errors and confirmations appear. -->
+<!-- Demonstrates: Component Parameters, one-way binding -->
+
+@if (!string.IsNullOrWhiteSpace(Message))
+{
+    <div class="alert @AlertCssClass alert-dismissible fade show" role="alert">
+        <i class="bi @IconClass me-2"></i>
+        @Message
+        @if (Dismissible)
+        {
+            <button type="button" class="btn-close" @onclick="Dismiss" aria-label="Close"></button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string Message { get; set; } = string.Empty;
+    [Parameter] public AlertType Type { get; set; } = AlertType.Info;
+    [Parameter] public bool Dismissible { get; set; } = true;
+    [Parameter] public EventCallback OnDismissed { get; set; }
+
+    private string AlertCssClass => Type switch
+    {
+        AlertType.Success => "alert-success",
+        AlertType.Warning => "alert-warning",
+        AlertType.Error   => "alert-danger",
+        AlertType.Info    => "alert-info",
+        _ => "alert-info"
+    };
+
+    private string IconClass => Type switch
+    {
+        AlertType.Success => "bi-check-circle-fill",
+        AlertType.Warning => "bi-exclamation-triangle-fill",
+        AlertType.Error   => "bi-x-circle-fill",
+        AlertType.Info    => "bi-info-circle-fill",
+        _ => "bi-info-circle-fill"
+    };
+
+    private async Task Dismiss()
+    {
+        await OnDismissed.InvokeAsync();
+    }
+}

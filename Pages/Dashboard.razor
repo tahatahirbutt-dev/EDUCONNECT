@@ -1,0 +1,164 @@
+@page "/dashboard"
+@using EduConnect.Services
+@using EduConnect.Interfaces
+@using EduConnect.Enums
+@using EduConnect.Models
+@using EduConnect.Components
+@inject AuthStateService AuthService
+@inject IStudentService StudentService
+@inject ICourseService CourseService
+@inject IGradeService GradeService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<!-- Dashboard.razor — Role-specific landing page after login -->
+<!-- Demonstrates: One-way binding for user data, CascadingParameter for AuthState -->
+
+<PageTitle>Dashboard — EduConnect</PageTitle>
+
+@if (!AuthService.IsAuthenticated)
+{
+    <p>Redirecting...</p>
+}
+else
+{
+    <div class="mb-4">
+        <!-- One-way binding: display logged-in user name from AuthState -->
+        <h2 class="fw-bold">Welcome, @AuthService.CurrentUser!.FullName 👋</h2>
+        <p class="text-muted">
+            <span class="badge @RoleBadge me-2">@AuthService.CurrentUser.GetRole()</span>
+            @DateTime.Now.ToString("dddd, MMMM dd yyyy")
+        </p>
+    </div>
+
+    <!-- ── Admin Dashboard ── -->
+    @if (AuthService.IsInRole(UserRole.Admin))
+    {
+        <div class="row g-4 mb-4">
+            <div class="col-sm-6 col-lg-3">
+                <StatCard Icon="bi-people-fill" Label="Total Students" Value="@StudentService.GetAll().Count().ToString()" Color="primary" />
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <StatCard Icon="bi-book-fill" Label="Total Courses" Value="@CourseService.GetAll().Count().ToString()" Color="success" />
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <StatCard Icon="bi-award-fill" Label="Grade Records" Value="@GradeService.GetAllGrades().Count().ToString()" Color="warning" />
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <StatCard Icon="bi-person-check-fill" Label="Active Enrollments"
+                          Value="@StudentService.GetAll().SelectMany(s => s.Enrollments).Count(e => e.Status == CourseEnrollmentActiveStatus.Active).ToString()"
+                          Color="info" />
+            </div>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-primary text-white fw-semibold">
+                        <i class="bi bi-people me-2"></i>Recent Students
+                    </div>
+                    <div class="list-group list-group-flush">
+                        @foreach (var s in StudentService.GetAll().Take(5))
+                        {
+                            <a href="/admin/students/@s.Id" class="list-group-item list-group-item-action d-flex justify-content-between">
+                                <span>@s.FullName</span>
+                                <span class="badge bg-secondary">Sem @s.Semester</span>
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-success text-white fw-semibold">
+                        <i class="bi bi-book me-2"></i>Course Overview
+                    </div>
+                    <div class="list-group list-group-flush">
+                        @foreach (var c in CourseService.GetAll().Take(5))
+                        {
+                            <div class="list-group-item d-flex justify-content-between">
+                                <span>@c.Code — @c.Title</span>
+                                <span class="badge @(c.EnrollmentStatus == EnrollmentStatus.Full ? "bg-danger" : "bg-success")">
+                                    @c.ActiveEnrollmentCount/@c.MaxCapacity
+                                </span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- ── Faculty Dashboard ── -->
+    @if (AuthService.IsInRole(UserRole.Faculty))
+    {
+        var myCourses = CourseService.GetCoursesForFaculty(AuthService.CurrentUser!.Id).ToList();
+        <div class="row g-4 mb-4">
+            <div class="col-sm-6 col-lg-4">
+                <StatCard Icon="bi-book-fill" Label="My Courses" Value="@myCourses.Count.ToString()" Color="primary" />
+            </div>
+            <div class="col-sm-6 col-lg-4">
+                <StatCard Icon="bi-people-fill" Label="Total Students" Value="@myCourses.Sum(c => c.ActiveEnrollmentCount).ToString()" Color="success" />
+            </div>
+            <div class="col-sm-6 col-lg-4">
+                <StatCard Icon="bi-pencil-square" Label="Grades Submitted" Value="@myCourses.Sum(c => GradeService.GetGradesForCourse(c.Id).Count()).ToString()" Color="warning" />
+            </div>
+        </div>
+        <div class="row g-3">
+            @foreach (var course in myCourses)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <CourseCard Course="@course" ShowEnrollButton="false" />
+                </div>
+            }
+        </div>
+    }
+
+    <!-- ── Student Dashboard ── -->
+    @if (AuthService.IsInRole(UserRole.Student) && AuthService.CurrentUser is EduConnect.Models.Student student)
+    {
+        var grades = GradeService.GetGradesForStudent(student.Id).ToList();
+        double cgpa = GradeService.ComputeCGPA(student.Id);
+        int totalCredits = student.Enrollments.Where(e => e.Status == CourseEnrollmentActiveStatus.Active).Sum(e => e.CourseCreditHours);
+
+        <div class="row g-4 mb-4">
+            <div class="col-sm-6 col-lg-3">
+                <!-- One-way binding: display CGPA from service, not editable -->
+                <StatCard Icon="bi-award-fill" Label="CGPA" Value="@cgpa.ToString("F2")" Color="@(cgpa >= 3.0 ? "success" : cgpa >= 2.0 ? "warning" : "danger")" />
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <StatCard Icon="bi-mortarboard-fill" Label="Semester" Value="@student.Semester.ToString()" Color="primary" />
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <StatCard Icon="bi-journal-check" Label="Enrolled Courses" Value="@student.Enrollments.Count(e => e.Status == CourseEnrollmentActiveStatus.Active).ToString()" Color="info" />
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <StatCard Icon="bi-lightning-fill" Label="Credit Hours" Value="@totalCredits.ToString()" Color="secondary" />
+            </div>
+        </div>
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-primary text-white fw-semibold">
+                <i class="bi bi-award me-2"></i>Grade Summary
+            </div>
+            <div class="card-body">
+                <GradeTable Grades="@grades" ShowSummary="true" />
+            </div>
+        </div>
+    }
+}
+
+@* Inline helper component for stat cards *@
+@code {
+    private string RoleBadge => AuthService.CurrentUser?.GetRole() switch
+    {
+        UserRole.Admin   => "bg-danger",
+        UserRole.Faculty => "bg-warning text-dark",
+        UserRole.Student => "bg-success",
+        _ => "bg-secondary"
+    };
+
+    protected override void OnInitialized()
+    {
+        if (!AuthService.IsAuthenticated)
+            Nav.NavigateTo("/login");
+    }
+}

@@ -1,0 +1,106 @@
+@page "/student/grades"
+@namespace EduConnect.Pages.StudentPages
+@using EduConnect.Services
+@using EduConnect.Interfaces
+@using EduConnect.Models
+@using EduConnect.Enums
+@using EduConnect.Components
+@inject AuthStateService AuthService
+@inject IGradeService GradeService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>My Grades — EduConnect</PageTitle>
+
+@if (!AuthService.IsInRole(UserRole.Student)) { Nav.NavigateTo("/unauthorized"); return; }
+
+@if (_student is not null)
+{
+    <div class="mb-4">
+        <h2 class="fw-bold mb-0"><i class="bi bi-award-fill me-2 text-success"></i>My Grades</h2>
+        <!-- One-way binding: display student name from AuthState -->
+        <p class="text-muted small">Academic record for @_student.FullName</p>
+    </div>
+
+    <!-- CGPA Summary Card at the top -->
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg-3">
+            <StatCard Icon="bi-award-fill" Label="CGPA" Value="@_cgpa.ToString("F2")" Color="@CgpaColor" />
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <StatCard Icon="bi-journal-check" Label="Courses Graded" Value="@_grades.Count.ToString()" Color="primary" />
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <StatCard Icon="bi-lightning-fill" Label="Credit Hours" Value="@_grades.Sum(g => g.CreditHours).ToString()" Color="info" />
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <StatCard Icon="bi-graph-up" Label="Avg Marks" Value="@(_grades.Any() ? _grades.Average(g => g.Marks).ToString("F1") : "—")" Color="secondary" />
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-success text-white fw-semibold">
+            <i class="bi bi-table me-2"></i>Grade Details
+        </div>
+        <div class="card-body">
+            @if (!_grades.Any())
+            {
+                <AlertBox Message="No grades have been posted for you yet. Check back after your faculty submits grades." Type="AlertType.Info" />
+            }
+            else
+            {
+                <!-- GradeTable with conditional CSS row colors: green=A/B, yellow=C/D, red=F -->
+                <GradeTable Grades="@_grades" ShowSummary="true" />
+            }
+        </div>
+    </div>
+
+    <!-- Pending (not yet graded) enrollments -->
+    @if (_pending.Any())
+    {
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header bg-secondary text-white fw-semibold">
+                <i class="bi bi-hourglass-split me-2"></i>Awaiting Grades
+            </div>
+            <ul class="list-group list-group-flush">
+                @foreach (var e in _pending)
+                {
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span><span class="badge bg-secondary me-2">@e.CourseCode</span>@e.CourseTitle</span>
+                        <span class="badge bg-warning text-dark">Pending</span>
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+}
+
+@code {
+    private EduConnect.Models.Student? _student;
+    private List<GradeRecord> _grades = new();
+    private List<Enrollment>  _pending = new();
+    private double _cgpa;
+
+    private string CgpaColor => _cgpa switch
+    {
+        >= 3.5 => "success",
+        >= 2.5 => "primary",
+        >= 1.5 => "warning",
+        _ => "danger"
+    };
+
+    protected override void OnInitialized()
+    {
+        _student = AuthService.CurrentUser as EduConnect.Models.Student;
+        if (_student is null) { Nav.NavigateTo("/unauthorized"); return; }
+
+        _grades  = GradeService.GetGradesForStudent(_student.Id).ToList();
+        _cgpa    = GradeService.ComputeCGPA(_student.Id);
+
+        // Show enrollments that have no grade yet
+        var gradedCourseIds = _grades.Select(g => g.CourseId).ToHashSet();
+        _pending = _student.Enrollments
+            .Where(e => e.Status == CourseEnrollmentActiveStatus.Active && !gradedCourseIds.Contains(e.CourseId))
+            .ToList();
+    }
+}

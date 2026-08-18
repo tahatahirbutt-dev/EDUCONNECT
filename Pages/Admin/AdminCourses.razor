@@ -1,0 +1,194 @@
+@page "/admin/courses"
+@using EduConnect.Services
+@using EduConnect.Interfaces
+@using EduConnect.Models
+@using EduConnect.Enums
+@using EduConnect.Components
+@inject AuthStateService AuthService
+@inject ICourseService CourseService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Manage Courses — EduConnect</PageTitle>
+
+@if (!AuthService.IsInRole(UserRole.Admin)) { Nav.NavigateTo("/unauthorized"); return; }
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-0"><i class="bi bi-book-fill me-2 text-success"></i>Course Management</h2>
+        <p class="text-muted small mb-0">Create, edit, and remove courses</p>
+    </div>
+    <button class="btn btn-success" @onclick="ShowAddForm">
+        <i class="bi bi-plus-lg me-1"></i>Add Course
+    </button>
+</div>
+
+<AlertBox Message="@_successMsg" Type="AlertType.Success" OnDismissed="@(() => _successMsg = string.Empty)" />
+<AlertBox Message="@_errorMsg"   Type="AlertType.Error"   OnDismissed="@(() => _errorMsg = string.Empty)" />
+
+@if (_showForm)
+{
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-success text-white fw-semibold">
+            @(_editing ? "Edit Course" : "Add New Course")
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Course Code</label>
+                    <input class="form-control" placeholder="CS101" @bind="_form.Code" />
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label fw-semibold">Title</label>
+                    <input class="form-control" placeholder="Introduction to Programming" @bind="_form.Title" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Credit Hours</label>
+                    <input type="number" class="form-control" min="1" max="6" @bind="_form.CreditHours" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Max Capacity</label>
+                    <input type="number" class="form-control" min="1" @bind="_form.MaxCapacity" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Assign Faculty</label>
+                    <select class="form-select" @bind="_selectedFacultyId">
+                        <option value="">— None —</option>
+                        @foreach (var f in _facultyList)
+                        {
+                            <option value="@f.Id">@f.FullName</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="mt-3 d-flex gap-2">
+                <button class="btn btn-success" @onclick="SaveCourse">
+                    <i class="bi bi-save me-1"></i>@(_editing ? "Update" : "Create") Course
+                </button>
+                <button class="btn btn-outline-secondary" @onclick="CancelForm">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Code</th><th>Title</th><th>Credits</th>
+                        <th>Faculty</th><th>Enrollment</th><th>Status</th><th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in CourseService.GetAll())
+                    {
+                        <tr>
+                            <td><span class="badge bg-secondary">@c.Code</span></td>
+                            <td class="fw-semibold">@c.Title</td>
+                            <td>@c.CreditHours</td>
+                            <td class="text-muted small">@c.FacultyName</td>
+                            <td>@c.ActiveEnrollmentCount / @c.MaxCapacity</td>
+                            <td>
+                                <span class="badge @StatusBadge(c.EnrollmentStatus)">@c.EnrollmentStatus</span>
+                            </td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-sm btn-outline-warning" @onclick="() => EditCourse(c)">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => PromptDelete(c)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<ConfirmDialog Title="Delete Course"
+               Message="@($"Delete '{_courseToDelete?.Title}'? Students enrolled will lose this record.")"
+               IsVisible="_showConfirm"
+               OnConfirmed="ConfirmDelete"
+               OnCancelled="() => _showConfirm = false" />
+
+@code {
+    private Course _form = new();
+    private bool _showForm = false;
+    private bool _editing  = false;
+    private string _successMsg = string.Empty;
+    private string _errorMsg   = string.Empty;
+    private bool _showConfirm  = false;
+    private Course? _courseToDelete;
+    private string _selectedFacultyId = string.Empty;
+    private List<Faculty> _facultyList = new();
+
+    protected override void OnInitialized()
+    {
+        _facultyList = AuthService.GetAllUsers().OfType<Faculty>().ToList();
+    }
+
+    private void ShowAddForm()
+    {
+        _form = new Course();
+        _editing = false;
+        _showForm = true;
+        _selectedFacultyId = string.Empty;
+    }
+
+    private void EditCourse(Course c)
+    {
+        _form = new Course
+        {
+            Id = c.Id, Code = c.Code, Title = c.Title,
+            CreditHours = c.CreditHours, MaxCapacity = c.MaxCapacity,
+            FacultyId = c.FacultyId, FacultyName = c.FacultyName
+        };
+        _selectedFacultyId = c.FacultyId?.ToString() ?? string.Empty;
+        _editing = true;
+        _showForm = true;
+    }
+
+    private void SaveCourse()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Code) || string.IsNullOrWhiteSpace(_form.Title))
+        {
+            _errorMsg = "Course code and title are required.";
+            return;
+        }
+        if (!string.IsNullOrWhiteSpace(_selectedFacultyId) && Guid.TryParse(_selectedFacultyId, out var fid))
+        {
+            var faculty = _facultyList.FirstOrDefault(f => f.Id == fid);
+            _form.FacultyId   = fid;
+            _form.FacultyName = faculty?.FullName ?? string.Empty;
+        }
+        if (_editing) CourseService.Update(_form);
+        else          CourseService.Add(_form);
+        _successMsg = $"Course '{_form.Title}' {(_editing ? "updated" : "created")} successfully.";
+        CancelForm();
+    }
+
+    private void CancelForm() { _showForm = false; _form = new(); }
+
+    private void PromptDelete(Course c) { _courseToDelete = c; _showConfirm = true; }
+    private void ConfirmDelete()
+    {
+        if (_courseToDelete is null) return;
+        CourseService.Delete(_courseToDelete.Id);
+        _successMsg = $"Course '{_courseToDelete.Title}' deleted.";
+        _showConfirm = false;
+        _courseToDelete = null;
+    }
+
+    private static string StatusBadge(EnrollmentStatus s) => s switch
+    {
+        EnrollmentStatus.Full       => "bg-danger",
+        EnrollmentStatus.AlmostFull => "bg-warning text-dark",
+        _ => "bg-success"
+    };
+}

@@ -1,0 +1,55 @@
+@using EduConnect.Enums
+@using EduConnect.Services
+@inject AuthStateService AuthService
+@inject NavigationManager Nav
+
+<!--
+    AuthGuard.razor — Custom route protection component.
+    Usage: Wrap page content in <AuthGuard RequiredRole="UserRole.Admin"> ... </AuthGuard>
+    If not authenticated → redirected to /login.
+    If authenticated but wrong role → redirected to /unauthorized.
+    Demonstrates: CascadingParameter usage, event-driven auth state.
+-->
+
+@if (_authorized)
+{
+    @ChildContent
+}
+else
+{
+    <!-- Show nothing while redirect happens — prevents flash of content -->
+    <LoadingSpinner IsLoading="true" Label="Checking access..." />
+}
+
+@code {
+    /// <summary>
+    /// Required role for this route. If null, any authenticated user is allowed.
+    /// </summary>
+    [Parameter] public UserRole? RequiredRole { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    // CascadingParameter: receives AuthStateService from MainLayout's CascadingValue
+    // This eliminates the need to inject AuthStateService separately on every page.
+    [CascadingParameter] public AuthStateService? CascadedAuth { get; set; }
+
+    private bool _authorized = false;
+
+    protected override void OnParametersSet()
+    {
+        var auth = CascadedAuth ?? AuthService;
+
+        if (!auth.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        if (RequiredRole.HasValue && !auth.IsInRole(RequiredRole.Value))
+        {
+            Nav.NavigateTo("/unauthorized");
+            return;
+        }
+
+        _authorized = true;
+    }
+}

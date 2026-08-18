@@ -1,0 +1,53 @@
+@page "/faculty/courses"
+@using EduConnect.Services
+@using EduConnect.Interfaces
+@using EduConnect.Enums
+@using EduConnect.Components
+@inject AuthStateService AuthService
+@inject ICourseService CourseService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>My Courses — EduConnect</PageTitle>
+
+@if (!AuthService.IsInRole(UserRole.Faculty)) { Nav.NavigateTo("/unauthorized"); return; }
+
+<div class="mb-4">
+    <h2 class="fw-bold mb-0">
+        <i class="bi bi-journal-bookmark-fill me-2 text-warning"></i>My Courses
+    </h2>
+    <!-- One-way binding: display faculty name -->
+    <p class="text-muted small">Courses assigned to @AuthService.CurrentUser!.FullName</p>
+</div>
+
+@{
+    var courses = CourseService.GetCoursesForFaculty(AuthService.CurrentUser!.Id).ToList();
+}
+
+@if (!courses.Any())
+{
+    <AlertBox Message="No courses assigned to you yet. Contact the administrator." Type="AlertType.Info" />
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-sm-4">
+            <StatCard Icon="bi-book-fill"    Label="Total Courses"  Value="@courses.Count.ToString()"                                   Color="primary" />
+        </div>
+        <div class="col-sm-4">
+            <StatCard Icon="bi-people-fill"  Label="Total Students" Value="@courses.Sum(c => c.ActiveEnrollmentCount).ToString()"        Color="success" />
+        </div>
+        <div class="col-sm-4">
+            <StatCard Icon="bi-lightning-fill" Label="Total Credits" Value="@courses.Sum(c => c.CreditHours).ToString()" Color="warning" />
+        </div>
+    </div>
+
+    <div class="row g-4">
+        @foreach (var course in courses)
+        {
+            <div class="col-md-6 col-lg-4">
+                <CourseCard Course="@course" ShowEnrollButton="false" />
+            </div>
+        }
+    </div>
+}

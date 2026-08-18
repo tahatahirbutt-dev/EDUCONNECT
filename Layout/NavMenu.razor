@@ -1,0 +1,124 @@
+@using EduConnect.Services
+@using EduConnect.Enums
+@using EduConnect.Components
+@inject AuthStateService AuthService
+@inject NavigationManager Nav
+@implements IDisposable
+
+<!-- NavMenu.razor — Dynamic navigation bar based on logged-in user role -->
+<!-- Demonstrates: One-way binding for user name and role badge -->
+<!-- One-way binding: @AuthService.CurrentUser.FullName displayed but not editable -->
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top shadow">
+    <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="/dashboard">
+            <i class="bi bi-mortarboard-fill me-2 text-warning"></i>EduConnect
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#navbarContent">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarContent">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+
+                <li class="nav-item">
+                    <a class="nav-link" href="/dashboard">
+                        <i class="bi bi-speedometer2 me-1"></i>Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/courses">
+                        <i class="bi bi-journal-bookmark me-1"></i>Courses
+                    </a>
+                </li>
+
+                @if (AuthService.IsInRole(UserRole.Admin))
+                {
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                            <i class="bi bi-shield-fill me-1"></i>Admin
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/admin/students"><i class="bi bi-people me-2"></i>Students</a></li>
+                            <li><a class="dropdown-item" href="/admin/courses"><i class="bi bi-book me-2"></i>Courses</a></li>
+                            <li><a class="dropdown-item" href="/admin/reports/grades"><i class="bi bi-bar-chart me-2"></i>Grade Report</a></li>
+                            <li><a class="dropdown-item" href="/admin/notifications"><i class="bi bi-megaphone me-2"></i>Broadcast</a></li>
+                        </ul>
+                    </li>
+                }
+
+                @if (AuthService.IsInRole(UserRole.Faculty))
+                {
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-workspace me-1"></i>Faculty
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/faculty/courses"><i class="bi bi-book me-2"></i>My Courses</a></li>
+                            <li><a class="dropdown-item" href="/faculty/grades"><i class="bi bi-pencil-square me-2"></i>Submit Grades</a></li>
+                        </ul>
+                    </li>
+                }
+
+                @if (AuthService.IsInRole(UserRole.Student))
+                {
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                            <i class="bi bi-mortarboard me-1"></i>Student
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/student/enroll"><i class="bi bi-plus-circle me-2"></i>Enroll</a></li>
+                            <li><a class="dropdown-item" href="/student/grades"><i class="bi bi-award me-2"></i>My Grades</a></li>
+                        </ul>
+                    </li>
+                }
+            </ul>
+
+            <!-- Right side: Notifications + User info -->
+            <div class="d-flex align-items-center gap-3">
+                @if (AuthService.CurrentUser is not null)
+                {
+                    <NotificationBell CurrentUserId="@AuthService.CurrentUser.Id" />
+
+                    <!-- One-way binding: display logged-in user name and role badge -->
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge @RoleBadgeClass">@AuthService.CurrentUser.GetRole()</span>
+                        <span class="text-white small fw-semibold">@AuthService.CurrentUser.FullName</span>
+                    </div>
+                }
+                <button class="btn btn-outline-light btn-sm" @onclick="Logout">
+                    <i class="bi bi-box-arrow-right me-1"></i>Logout
+                </button>
+            </div>
+        </div>
+    </div>
+</nav>
+
+@code {
+    private string RoleBadgeClass => AuthService.CurrentUser?.GetRole() switch
+    {
+        UserRole.Admin   => "bg-danger",
+        UserRole.Faculty => "bg-warning text-dark",
+        UserRole.Student => "bg-success",
+        _ => "bg-secondary"
+    };
+
+    protected override void OnInitialized()
+    {
+        // Subscribe so NavBar re-renders reactively on auth state change
+        AuthService.OnAuthStateChanged += HandleAuthChanged;
+    }
+
+    private void HandleAuthChanged() => InvokeAsync(StateHasChanged);
+
+    private void Logout()
+    {
+        AuthService.Logout();
+        Nav.NavigateTo("/login");
+    }
+
+    public void Dispose()
+    {
+        AuthService.OnAuthStateChanged -= HandleAuthChanged;
+    }
+}

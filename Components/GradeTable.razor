@@ -1,0 +1,113 @@
+@using EduConnect.Models
+
+<!-- GradeTable.razor — Interactive table with conditional row coloring -->
+<!-- Used in both faculty grade submission and student grade view. -->
+<!-- Demonstrates: Two-way binding on mark inputs, conditional CSS classes -->
+
+<div class="table-responsive">
+    <table class="table table-bordered table-hover align-middle">
+        <thead class="table-dark">
+            <tr>
+                @if (ShowStudentColumn)
+                {
+                    <th><i class="bi bi-person me-1"></i>Student</th>
+                }
+                <th><i class="bi bi-book me-1"></i>Course</th>
+                <th style="width:120px;">Credits</th>
+                @if (Editable)
+                {
+                    <th style="width:130px;">Marks (0–100)</th>
+                }
+                else
+                {
+                    <th style="width:100px;">Marks</th>
+                }
+                <th style="width:100px;">Grade</th>
+                <th style="width:110px;">Points</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (!Grades.Any())
+            {
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-4">
+                        <i class="bi bi-inbox fs-4 d-block mb-1"></i>No grade records found.
+                    </td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var grade in Grades)
+                {
+                    <tr class="@grade.RowCssClass">
+                        @if (ShowStudentColumn)
+                        {
+                            <td class="fw-semibold">@grade.StudentName</td>
+                        }
+                        <td>
+                            <span class="badge bg-secondary me-1">@grade.CourseCode</span>
+                            @grade.CourseTitle
+                        </td>
+                        <td class="text-center">@grade.CreditHours</td>
+                        @if (Editable)
+                        {
+                            <td>
+                                <!-- Two-way binding: marks entry uses @bind on each cell -->
+                                <input type="number" min="0" max="100"
+                                       class="form-control form-control-sm"
+                                       @bind="grade.Marks"
+                                       @bind:event="oninput" />
+                            </td>
+                        }
+                        else
+                        {
+                            <td class="text-center fw-bold">@grade.Marks.ToString("F0")</td>
+                        }
+                        <td class="text-center">
+                            <span class="badge @GradeBadgeClass(grade.LetterGrade) fs-6">
+                                @grade.LetterGrade
+                            </span>
+                        </td>
+                        <td class="text-center">@grade.GradePoints.ToString("F1")</td>
+                    </tr>
+                }
+            }
+        </tbody>
+        @if (Grades.Any() && ShowSummary)
+        {
+            <tfoot class="table-secondary fw-bold">
+                <tr>
+                    <td colspan="@(ShowStudentColumn ? 5 : 4)" class="text-end">CGPA:</td>
+                    <td class="text-center">@ComputedCGPA</td>
+                </tr>
+            </tfoot>
+        }
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public List<GradeRecord> Grades { get; set; } = new();
+    [Parameter] public bool Editable { get; set; } = false;
+    [Parameter] public bool ShowStudentColumn { get; set; } = false;
+    [Parameter] public bool ShowSummary { get; set; } = false;
+
+    private string ComputedCGPA
+    {
+        get
+        {
+            if (!Grades.Any()) return "0.00";
+            double total  = Grades.Sum(g => g.GradePoints * g.CreditHours);
+            int credits   = Grades.Sum(g => g.CreditHours);
+            return credits == 0 ? "0.00" : (total / credits).ToString("F2");
+        }
+    }
+
+    private static string GradeBadgeClass(string grade) => grade switch
+    {
+        "A" => "bg-success",
+        "B" => "bg-primary",
+        "C" => "bg-warning text-dark",
+        "D" => "bg-secondary",
+        _   => "bg-danger"
+    };
+}

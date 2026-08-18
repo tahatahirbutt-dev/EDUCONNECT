@@ -1,0 +1,43 @@
+<!-- ConfirmDialog.razor — Bootstrap confirmation modal -->
+<!-- Used before any destructive action: delete student, drop course. -->
+<!-- Demonstrates: EventCallback for parent-child communication -->
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>@Title
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Cancel"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">@Message</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="Cancel">
+                        <i class="bi bi-x-lg me-1"></i>Cancel
+                    </button>
+                    <button class="btn btn-danger" @onclick="Confirm">
+                        <i class="bi bi-trash-fill me-1"></i>Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Title   { get; set; } = "Confirm Action";
+    [Parameter] public string Message { get; set; } = "Are you sure?";
+    [Parameter] public bool IsVisible { get; set; } = false;
+
+    // EventCallback: parent-child communication — parent reacts when user confirms or cancels
+    [Parameter] public EventCallback OnConfirmed { get; set; }
+    [Parameter] public EventCallback OnCancelled { get; set; }
+
+    private async Task Confirm() => await OnConfirmed.InvokeAsync();
+    private async Task Cancel()  => await OnCancelled.InvokeAsync();
+}

@@ -1,0 +1,43 @@
+@using EduConnect.Services
+@using EduConnect.Models
+@inherits LayoutComponentBase
+@inject AuthStateService AuthService
+@inject NavigationManager Nav
+@implements IDisposable
+
+@* MainLayout.razor — Layout component only (no HTML shell — that lives in App.razor) *@
+@* Demonstrates: CascadingValue to pass AuthState to all child components *@
+@* DIP: child components receive AuthState via cascade, not by injecting separately *@
+
+<CascadingValue Value="AuthService">
+    @if (AuthService.IsAuthenticated)
+    {
+        <NavMenu />
+        <div class="container-fluid py-4 px-4" style="margin-top:70px;">
+            @Body
+        </div>
+    }
+    else
+    {
+        @Body
+    }
+</CascadingValue>
+
+@code {
+    protected override void OnInitialized()
+    {
+        AuthService.OnAuthStateChanged += HandleAuthChanged;
+    }
+
+    private void HandleAuthChanged()
+    {
+        InvokeAsync(StateHasChanged);
+        if (!AuthService.IsAuthenticated)
+            Nav.NavigateTo("/login");
+    }
+
+    public void Dispose()
+    {
+        AuthService.OnAuthStateChanged -= HandleAuthChanged;
+    }
+}

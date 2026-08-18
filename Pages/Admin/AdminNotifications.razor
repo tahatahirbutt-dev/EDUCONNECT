@@ -1,0 +1,167 @@
+@page "/admin/notifications"
+@using EduConnect.Services
+@using EduConnect.Interfaces
+@using EduConnect.Enums
+@using EduConnect.Models
+@using EduConnect.Components
+@inject AuthStateService AuthService
+@inject INotificationService NotificationService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Broadcast — EduConnect</PageTitle>
+
+@if (!AuthService.IsInRole(UserRole.Admin)) { Nav.NavigateTo("/unauthorized"); return; }
+
+<div class="mb-4">
+    <h2 class="fw-bold mb-0"><i class="bi bi-megaphone-fill me-2 text-warning"></i>Broadcast Notification</h2>
+    <p class="text-muted small">Send announcements to specific user roles</p>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <AlertBox Message="@_successMsg" Type="AlertType.Success" OnDismissed="@(() => _successMsg = string.Empty)" />
+                <AlertBox Message="@_errorMsg"   Type="AlertType.Error"   OnDismissed="@(() => _errorMsg = string.Empty)" />
+
+                <div class="mb-4">
+                    <label class="form-label fw-semibold">Message <span class="text-danger">*</span></label>
+                    <!-- Two-way binding: textarea message updates _message in real-time -->
+                    <textarea class="form-control" rows="4"
+                              placeholder="Enter your announcement here..."
+                              @bind="_message" @bind:event="oninput"></textarea>
+                    <div class="form-text text-end text-muted">@_message.Length characters</div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-semibold">Send To <span class="text-danger">*</span></label>
+                    <div class="d-flex gap-4">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="chkAdmin"
+                                   @bind="_toAdmin" />
+                            <label class="form-check-label" for="chkAdmin">
+                                <span class="badge bg-danger me-1">Admin</span>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="chkFaculty"
+                                   @bind="_toFaculty" />
+                            <label class="form-check-label" for="chkFaculty">
+                                <span class="badge bg-warning text-dark me-1">Faculty</span>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="chkStudent"
+                                   @bind="_toStudent" />
+                            <label class="form-check-label" for="chkStudent">
+                                <span class="badge bg-success me-1">Students</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-warning px-4 fw-semibold" @onclick="SendBroadcast"
+                        disabled="@_sending">
+                    @if (_sending) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                    <i class="bi bi-send-fill me-1"></i>Send Broadcast
+                </button>
+            </div>
+        </div>
+
+        <!-- Notification history -->
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header bg-dark text-white fw-semibold">
+                <i class="bi bi-clock-history me-2"></i>Recent Broadcasts
+            </div>
+            <div class="list-group list-group-flush">
+                @foreach (var n in _recentBroadcasts)
+                {
+                    <div class="list-group-item">
+                        <div class="d-flex align-items-start gap-2">
+                            <span class="badge @n.TypeBadgeClass mt-1">
+                                <i class="bi @n.TypeIcon"></i>
+                            </span>
+                            <div class="flex-grow-1">
+                                <p class="mb-0 small">@n.Message</p>
+                                <small class="text-muted">@n.CreatedAt.ToString("MMM dd, HH:mm")</small>
+                            </div>
+                        </div>
+                    </div>
+                }
+                @if (!_recentBroadcasts.Any())
+                {
+                    <div class="list-group-item text-muted text-center py-3">No broadcasts yet.</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Two-way binding variable for textarea
+    private string _message   = string.Empty;
+    private bool _toAdmin     = false;
+    private bool _toFaculty   = true;
+    private bool _toStudent   = true;
+    private bool _sending     = false;
+    private string _successMsg = string.Empty;
+    private string _errorMsg   = string.Empty;
+    private List<Notification> _recentBroadcasts = new();
+
+    protected override void OnInitialized()
+    {
+        LoadHistory();
+    }
+
+    private async Task SendBroadcast()
+    {
+        if (string.IsNullOrWhiteSpace(_message))
+        {
+            _errorMsg = "Message cannot be empty.";
+            return;
+        }
+        if (!_toAdmin && !_toFaculty && !_toStudent)
+        {
+            _errorMsg = "Select at least one recipient role.";
+            return;
+        }
+
+        _sending = true;
+        await Task.Delay(300);
+
+        var allUsers = AuthService.GetAllUsers();
+        int count = 0;
+
+        if (_toAdmin)
+        {
+            NotificationService.BroadcastToRole(allUsers, UserRole.Admin, _message, NotificationType.Announcement);
+            count += allUsers.Count(u => u.GetRole() == UserRole.Admin);
+        }
+        if (_toFaculty)
+        {
+            NotificationService.BroadcastToRole(allUsers, UserRole.Faculty, _message, NotificationType.Announcement);
+            count += allUsers.Count(u => u.GetRole() == UserRole.Faculty);
+        }
+        if (_toStudent)
+        {
+            NotificationService.BroadcastToRole(allUsers, UserRole.Student, _message, NotificationType.Announcement);
+            count += allUsers.Count(u => u.GetRole() == UserRole.Student);
+        }
+
+        _sending = false;
+        _successMsg = $"Broadcast sent to {count} users.";
+        _message = string.Empty;
+        LoadHistory();
+    }
+
+    private void LoadHistory()
+    {
+        // Show notifications sent to the admin as a record of broadcasts
+        if (AuthService.CurrentUser is not null)
+            _recentBroadcasts = NotificationService
+                .GetNotificationsForUser(AuthService.CurrentUser.Id)
+                .Where(n => n.Type == NotificationType.Announcement)
+                .Take(10).ToList();
+    }
+}

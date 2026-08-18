@@ -1,0 +1,15 @@
+@page "/unauthorized"
+@inject NavigationManager Nav
+
+<PageTitle>Unauthorized — EduConnect</PageTitle>
+
+<div class="min-vh-100 d-flex align-items-center justify-content-center">
+    <div class="text-center">
+        <i class="bi bi-shield-x text-danger" style="font-size:5rem;"></i>
+        <h1 class="fw-bold mt-3">403 — Unauthorized</h1>
+        <p class="text-muted lead">You don't have permission to access this page.</p>
+        <button class="btn btn-primary mt-2" @onclick='() => Nav.NavigateTo("/dashboard")'>
+            <i class="bi bi-house me-2"></i>Go to Dashboard
+        </button>
+    </div>
+</div>

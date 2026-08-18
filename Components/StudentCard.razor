@@ -1,0 +1,48 @@
+@using EduConnect.Models
+
+<!-- StudentCard.razor — Reusable student summary card -->
+<!-- Demonstrates: One-way binding (display only), Component Parameters -->
+
+<div class="card h-100 shadow-sm border-0">
+    <div class="card-body">
+        <div class="d-flex align-items-center mb-2">
+            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3"
+                 style="width:42px;height:42px;font-size:1.1rem;flex-shrink:0;">
+                @(Student.FullName.Length > 0 ? Student.FullName[0].ToString().ToUpper() : "?")
+            </div>
+            <div>
+                <!-- One-way binding: display name from bound Student parameter -->
+                <h6 class="mb-0 fw-bold">@Student.FullName</h6>
+                <small class="text-muted">@Student.Email</small>
+            </div>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-2">
+            <span class="badge bg-secondary">Semester @Student.Semester</span>
+            <span class="badge @CgpaBadgeClass">CGPA: @Student.CGPA.ToString("F2")</span>
+        </div>
+        @if (ShowActions)
+        {
+            <div class="mt-3 d-flex gap-2">
+                <a href="/admin/students/@Student.Id" class="btn btn-sm btn-outline-primary flex-fill">
+                    <i class="bi bi-eye me-1"></i>View
+                </a>
+                <a href="/admin/students/edit/@Student.Id" class="btn btn-sm btn-outline-secondary flex-fill">
+                    <i class="bi bi-pencil me-1"></i>Edit
+                </a>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Student Student { get; set; } = default!;
+    [Parameter] public bool ShowActions { get; set; } = true;
+
+    private string CgpaBadgeClass => Student.CGPA switch
+    {
+        >= 3.5 => "bg-success",
+        >= 2.5 => "bg-primary",
+        >= 1.5 => "bg-warning text-dark",
+        _ => "bg-danger"
+    };
+}

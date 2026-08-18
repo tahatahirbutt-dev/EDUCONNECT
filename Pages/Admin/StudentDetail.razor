@@ -1,0 +1,145 @@
+@page "/admin/students/{Id:guid}"
+@using EduConnect.Services
+@using EduConnect.Interfaces
+@using EduConnect.Models
+@using EduConnect.Enums
+@using EduConnect.Components
+@inject AuthStateService AuthService
+@inject IStudentService StudentService
+@inject IGradeService GradeService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Student Detail — EduConnect</PageTitle>
+
+@if (!AuthService.IsInRole(UserRole.Admin)) { Nav.NavigateTo("/unauthorized"); return; }
+
+<LoadingSpinner IsLoading="@_loading">
+    @if (_student is null)
+    {
+        <AlertBox Message="Student not found." Type="AlertType.Error" />
+    }
+    else
+    {
+        <div class="d-flex align-items-center mb-4 gap-3">
+            <a href="/admin/students" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i>Back
+            </a>
+            <h2 class="fw-bold mb-0">
+                <i class="bi bi-person-badge-fill me-2 text-primary"></i>@_student.FullName
+            </h2>
+            <a href="/admin/students/edit/@_student.Id" class="btn btn-sm btn-outline-warning ms-auto">
+                <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+        </div>
+
+        <div class="row g-4">
+            <!-- Profile Card -->
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm text-center p-3">
+                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center mx-auto mb-3"
+                         style="width:72px;height:72px;font-size:2rem;">
+                        @_student.FullName[0].ToString().ToUpper()
+                    </div>
+                    <h5 class="fw-bold">@_student.FullName</h5>
+                    <p class="text-muted small mb-2">@_student.Email</p>
+                    <div class="d-flex justify-content-center gap-2 flex-wrap">
+                        <span class="badge bg-secondary">Semester @_student.Semester</span>
+                        <span class="badge @CgpaBadge">CGPA @_cgpa.ToString("F2")</span>
+                    </div>
+                </div>
+
+                <!-- Summary Stats -->
+                <div class="card border-0 shadow-sm mt-3">
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span class="text-muted">Active Enrollments</span>
+                            <strong>@_activeEnrollments.Count</strong>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span class="text-muted">Credit Hours</span>
+                            <strong>@_activeEnrollments.Sum(e => e.CourseCreditHours)</strong>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span class="text-muted">Grades Received</span>
+                            <strong>@_grades.Count</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Enrollments & Grades -->
+            <div class="col-md-8">
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-primary text-white fw-semibold">
+                        <i class="bi bi-journal-bookmark me-2"></i>Active Enrollments
+                    </div>
+                    <div class="card-body p-0">
+                        @if (!_activeEnrollments.Any())
+                        {
+                            <p class="text-muted text-center py-3 mb-0">No active enrollments.</p>
+                        }
+                        else
+                        {
+                            <!-- C# sorts enrollments alphabetically by course title -->
+                            <ul class="list-group list-group-flush">
+                                @foreach (var e in _activeEnrollments.OrderBy(e => e.CourseTitle))
+                                {
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <span class="badge bg-secondary me-2">@e.CourseCode</span>
+                                            @e.CourseTitle
+                                        </div>
+                                        <span class="text-muted small">@e.CourseCreditHours cr</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-success text-white fw-semibold">
+                        <i class="bi bi-award me-2"></i>Grade History
+                    </div>
+                    <div class="card-body">
+                        <GradeTable Grades="@_grades" ShowSummary="true" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</LoadingSpinner>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private Student? _student;
+    private List<GradeRecord> _grades = new();
+    private List<Enrollment> _activeEnrollments = new();
+    private double _cgpa;
+    private bool _loading = true;
+
+    private string CgpaBadge => _cgpa switch
+    {
+        >= 3.5 => "bg-success",
+        >= 2.5 => "bg-primary",
+        >= 1.5 => "bg-warning text-dark",
+        _ => "bg-danger"
+    };
+
+    protected override void OnParametersSet()
+    {
+        _student = StudentService.GetById(Id);
+        if (_student is not null)
+        {
+            _grades = GradeService.GetGradesForStudent(Id).ToList();
+            _activeEnrollments = _student.Enrollments
+                .Where(e => e.Status == CourseEnrollmentActiveStatus.Active)
+                .ToList();
+            // C#: compute average marks
+            _cgpa = GradeService.ComputeCGPA(Id);
+        }
+        _loading = false;
+    }
+}

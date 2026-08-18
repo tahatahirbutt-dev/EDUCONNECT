@@ -1,0 +1,111 @@
+@page "/notifications"
+@using EduConnect.Services
+@using EduConnect.Interfaces
+@using EduConnect.Models
+@using EduConnect.Components
+@implements IDisposable
+@inject AuthStateService AuthService
+@inject INotificationService NotificationService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Notifications — EduConnect</PageTitle>
+
+@if (!AuthService.IsAuthenticated) { Nav.NavigateTo("/login"); return; }
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-0"><i class="bi bi-bell-fill me-2 text-primary"></i>Notifications</h2>
+        <p class="text-muted small mb-0">@_unread unread of @_notifications.Count total</p>
+    </div>
+    @if (_unread > 0)
+    {
+        <button class="btn btn-outline-primary btn-sm" @onclick="MarkAllRead">
+            <i class="bi bi-check-all me-1"></i>Mark All Read
+        </button>
+    }
+</div>
+
+@if (!_notifications.Any())
+{
+    <div class="text-center text-muted py-5">
+        <i class="bi bi-bell-slash fs-1 d-block mb-3"></i>
+        <p>You have no notifications yet.</p>
+    </div>
+}
+else
+{
+    <div class="list-group shadow-sm">
+        @foreach (var n in _notifications)
+        {
+            <div class="list-group-item list-group-item-action @(n.IsRead ? "" : "border-start border-primary border-3")"
+                 style="cursor:pointer;"
+                 @onclick="() => MarkRead(n)">
+                <div class="d-flex align-items-start gap-3">
+                    <span class="badge @n.TypeBadgeClass mt-1 p-2">
+                        <i class="bi @n.TypeIcon fs-6"></i>
+                    </span>
+                    <div class="flex-grow-1">
+                        <p class="mb-0 @(n.IsRead ? "text-muted" : "fw-semibold")">@n.Message</p>
+                        <small class="text-muted">@n.CreatedAt.ToString("dddd, MMMM dd yyyy — HH:mm")</small>
+                    </div>
+                    @if (!n.IsRead)
+                    {
+                        <span class="badge bg-primary rounded-pill align-self-center">New</span>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<Notification> _notifications = new();
+    private int _unread;
+
+    protected override void OnInitialized()
+    {
+        NotificationService.OnNewNotification += HandleNew;
+        Load();
+    }
+
+    private void Load()
+    {
+        if (AuthService.CurrentUser is null) return;
+        _notifications = NotificationService
+            .GetNotificationsForUser(AuthService.CurrentUser.Id)
+            .ToList();
+        _unread = _notifications.Count(n => !n.IsRead);
+    }
+
+    private void HandleNew(Notification n)
+    {
+        if (AuthService.CurrentUser is not null && n.UserId == AuthService.CurrentUser.Id)
+        {
+            Load();
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void MarkRead(Notification n)
+    {
+        NotificationService.MarkAsRead(n.Id);
+        n.IsRead = true;
+        _unread  = _notifications.Count(x => !x.IsRead);
+    }
+
+    private void MarkAllRead()
+    {
+        foreach (var n in _notifications.Where(n => !n.IsRead))
+        {
+            NotificationService.MarkAsRead(n.Id);
+            n.IsRead = true;
+        }
+        _unread = 0;
+    }
+
+    public void Dispose()
+    {
+        NotificationService.OnNewNotification -= HandleNew;
+    }
+}

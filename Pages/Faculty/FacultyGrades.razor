@@ -1,0 +1,199 @@
+@page "/faculty/grades"
+@using EduConnect.Services
+@using EduConnect.Interfaces
+@using EduConnect.Models
+@using EduConnect.Enums
+@using EduConnect.Components
+@inject AuthStateService AuthService
+@inject ICourseService CourseService
+@inject IGradeService GradeService
+@inject INotificationService NotificationService
+@inject IStudentService StudentService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Submit Grades — EduConnect</PageTitle>
+
+@if (!AuthService.IsInRole(UserRole.Faculty)) { Nav.NavigateTo("/unauthorized"); return; }
+
+<div class="mb-4">
+    <h2 class="fw-bold mb-0"><i class="bi bi-pencil-square me-2 text-warning"></i>Submit Grades</h2>
+    <p class="text-muted small">Select a course, enter marks, then submit</p>
+</div>
+
+<AlertBox Message="@_successMsg" Type="AlertType.Success" OnDismissed="@(() => _successMsg = string.Empty)" />
+<AlertBox Message="@_errorMsg"   Type="AlertType.Error"   OnDismissed="@(() => _errorMsg = string.Empty)" />
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <label class="form-label fw-semibold">Select Course</label>
+        <!-- Two-way binding: dropdown fires OnCourseSelected when changed -->
+        <select class="form-select" @bind="_selectedCourseId" @bind:event="onchange" @oninput="HandleCourseSelected">
+            <option value="">— Choose a course —</option>
+            @foreach (var c in _myCourses)
+            {
+                <option value="@c.Id">@c.Code — @c.Title (@c.ActiveEnrollmentCount students)</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (_selectedCourse is not null)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-warning fw-semibold">
+            <i class="bi bi-people me-2"></i>@_selectedCourse.Code — @_selectedCourse.Title
+            <span class="badge bg-dark ms-2">@_gradeRows.Count students</span>
+        </div>
+        <div class="card-body">
+            @if (!_gradeRows.Any())
+            {
+                <AlertBox Message="No students enrolled in this course yet." Type="AlertType.Info" />
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Student</th>
+                                <th style="width:160px;">Marks (0–100)</th>
+                                <th style="width:100px;">Letter</th>
+                                <th style="width:100px;">Points</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _gradeRows)
+                            {
+                                <tr class="@row.RowCssClass">
+                                    <td class="fw-semibold">@row.StudentName</td>
+                                    <td>
+                                        <!-- Two-way binding: @bind on each marks input cell -->
+                                        <input type="number" min="0" max="100"
+                                               class="form-control form-control-sm"
+                                               @bind="row.Marks" @bind:event="oninput" />
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge fs-6 @GradeBadge(row.LetterGrade)">@row.LetterGrade</span>
+                                    </td>
+                                    <td class="text-center">@row.GradePoints.ToString("F1")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex gap-2 mt-3">
+                    <button class="btn btn-warning px-4 fw-semibold" @onclick="SubmitGrades"
+                            disabled="@_submitting">
+                        @if (_submitting) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                        <i class="bi bi-check-lg me-1"></i>Submit Grades
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="ResetGrades">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private List<Course>      _myCourses      = new();
+    private List<GradeRecord> _gradeRows      = new();
+    private Course?           _selectedCourse = null;
+    private string            _selectedCourseId = string.Empty;
+    private string _successMsg = string.Empty;
+    private string _errorMsg   = string.Empty;
+    private bool   _submitting = false;
+
+    protected override void OnInitialized()
+    {
+        if (!AuthService.IsAuthenticated) return;
+        _myCourses = CourseService.GetCoursesForFaculty(AuthService.CurrentUser!.Id).ToList();
+    }
+
+    // EventCallback equivalent: fires when course dropdown changes
+    // Loads enrolled students for the selected course
+    private void HandleCourseSelected(ChangeEventArgs e)
+    {
+        _gradeRows = new();
+        _selectedCourse = null;
+        _selectedCourseId = e.Value?.ToString() ?? string.Empty;
+
+        if (!Guid.TryParse(_selectedCourseId, out var courseId)) return;
+
+        _selectedCourse = CourseService.GetById(courseId);
+        if (_selectedCourse is null) return;
+
+        // Load enrolled students and pre-fill with existing grades if any
+        foreach (var enrollment in _selectedCourse.Enrollments
+            .Where(en => en.Status == CourseEnrollmentActiveStatus.Active))
+        {
+            var existing = GradeService.GetGrade(enrollment.StudentId, courseId);
+            _gradeRows.Add(existing ?? new GradeRecord
+            {
+                StudentId   = enrollment.StudentId,
+                StudentName = StudentService.GetById(enrollment.StudentId)?.FullName ?? "Unknown",
+                CourseId    = courseId,
+                CourseCode  = _selectedCourse.Code,
+                CourseTitle = _selectedCourse.Title,
+                CreditHours = _selectedCourse.CreditHours,
+                Marks       = 0
+            });
+        }
+    }
+
+    private async Task SubmitGrades()
+    {
+        if (!_gradeRows.Any()) return;
+
+        // Validate all marks are in range
+        if (_gradeRows.Any(r => r.Marks < 0 || r.Marks > 100))
+        {
+            _errorMsg = "All marks must be between 0 and 100.";
+            return;
+        }
+
+        _submitting = true;
+        await Task.Delay(400);
+
+        // Call IGradeService.SubmitGrade() for each record and fire OnGradesSubmitted event
+        foreach (var row in _gradeRows)
+        {
+            GradeService.SubmitGrade(row);
+
+            // Fire enrollment notification to the student
+            NotificationService.SendNotification(new Notification
+            {
+                UserId  = row.StudentId,
+                Message = $"Grades posted for {row.CourseCode} — {row.CourseTitle}. Your mark: {row.Marks:F0} ({row.LetterGrade})",
+                Type    = NotificationType.GradePosted
+            });
+        }
+
+        // Update cached CGPA for each student
+        var allStudents = StudentService.GetAll().ToList();
+        foreach (var row in _gradeRows)
+        {
+            var student = allStudents.FirstOrDefault(s => s.Id == row.StudentId);
+            if (student is not null)
+                student.CGPA = GradeService.ComputeCGPA(student.Id);
+        }
+
+        _submitting = false;
+        _successMsg = $"Grades submitted for {_gradeRows.Count} students in {_selectedCourse?.Title}.";
+    }
+
+    private void ResetGrades()
+    {
+        foreach (var row in _gradeRows) row.Marks = 0;
+    }
+
+    private static string GradeBadge(string g) => g switch
+    {
+        "A" => "bg-success", "B" => "bg-primary",
+        "C" => "bg-warning text-dark", "D" => "bg-secondary",
+        _ => "bg-danger"
+    };
+}

@@ -1,0 +1,75 @@
+@using EduConnect.Models
+@using EduConnect.Enums
+
+<!-- CourseCard.razor — Reusable course display card -->
+<!-- Demonstrates: EventCallback<Course> for parent-child communication -->
+<!-- Parent page calls the service when OnEnroll fires — not this component (SRP) -->
+
+<div class="card h-100 shadow-sm border-0">
+    <div class="card-header d-flex justify-content-between align-items-center
+                @(Course.EnrollmentStatus == EnrollmentStatus.Full ? "bg-danger text-white" :
+                  Course.EnrollmentStatus == EnrollmentStatus.AlmostFull ? "bg-warning" : "bg-primary text-white")">
+        <span class="fw-bold">@Course.Code</span>
+        <span class="badge bg-light text-dark">@Course.CreditHours cr</span>
+    </div>
+    <div class="card-body d-flex flex-column">
+        <h6 class="card-title">@Course.Title</h6>
+        <p class="card-text text-muted small mb-1">
+            <i class="bi bi-person-workspace me-1"></i>@Course.FacultyName
+        </p>
+
+        <!-- Enrollment progress bar -->
+        <div class="mt-auto">
+            <div class="d-flex justify-content-between small mb-1">
+                <span>Enrollment</span>
+                <span>@Course.ActiveEnrollmentCount / @Course.MaxCapacity</span>
+            </div>
+            <div class="progress" style="height:8px;">
+                <div class="progress-bar @ProgressBarClass"
+                     role="progressbar"
+                     style="width:@Course.EnrollmentProgress%"
+                     aria-valuenow="@Course.EnrollmentProgress"
+                     aria-valuemin="0" aria-valuemax="100">
+                </div>
+            </div>
+            <div class="mt-2">
+                <span class="badge @StatusBadgeClass">@Course.EnrollmentStatus</span>
+            </div>
+        </div>
+
+        @if (ShowEnrollButton)
+        {
+            <button class="btn btn-primary btn-sm mt-3 w-100"
+                    disabled="@(Course.EnrollmentStatus == EnrollmentStatus.Full)"
+                    @onclick="HandleEnroll">
+                <i class="bi bi-plus-circle me-1"></i>
+                @(Course.EnrollmentStatus == EnrollmentStatus.Full ? "Course Full" : "Enroll")
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Course Course { get; set; } = default!;
+    [Parameter] public bool ShowEnrollButton { get; set; } = false;
+
+    // EventCallback<Course>: when Enroll is clicked, parent page receives the Course object
+    // and calls the service. This is parent-child component communication via EventCallback.
+    [Parameter] public EventCallback<Course> OnEnroll { get; set; }
+
+    private async Task HandleEnroll() => await OnEnroll.InvokeAsync(Course);
+
+    private string ProgressBarClass => Course.EnrollmentStatus switch
+    {
+        EnrollmentStatus.Full       => "bg-danger",
+        EnrollmentStatus.AlmostFull => "bg-warning",
+        _ => "bg-success"
+    };
+
+    private string StatusBadgeClass => Course.EnrollmentStatus switch
+    {
+        EnrollmentStatus.Full       => "bg-danger",
+        EnrollmentStatus.AlmostFull => "bg-warning text-dark",
+        _ => "bg-success"
+    };
+}

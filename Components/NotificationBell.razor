@@ -1,0 +1,97 @@
+@using EduConnect.Interfaces
+@using EduConnect.Models
+@implements IDisposable
+
+<!-- NotificationBell.razor — Bell icon in NavBar with unread badge -->
+<!-- Demonstrates: Event subscription/unsubscription, IDisposable, StateHasChanged() -->
+<!-- Subscribes to OnNewNotification in OnInitialized, unsubscribes in Dispose -->
+
+@inject INotificationService NotificationService
+
+@if (CurrentUserId != Guid.Empty)
+{
+    <div class="dropdown">
+        <button class="btn btn-link nav-link text-white position-relative p-2"
+                data-bs-toggle="dropdown" aria-expanded="false" id="notifDropdown">
+            <i class="bi bi-bell-fill fs-5"></i>
+            @if (UnreadCount > 0)
+            {
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                      style="font-size:0.65rem;">
+                    @(UnreadCount > 9 ? "9+" : UnreadCount.ToString())
+                </span>
+            }
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow" style="width:320px;max-height:400px;overflow-y:auto;">
+            <li><h6 class="dropdown-header">Notifications</h6></li>
+            @if (!_recent.Any())
+            {
+                <li><span class="dropdown-item text-muted small">No notifications yet.</span></li>
+            }
+            else
+            {
+                @foreach (var n in _recent)
+                {
+                    <li>
+                        <a class="dropdown-item @(n.IsRead ? "text-muted" : "fw-semibold")"
+                           href="/notifications" @onclick="() => MarkRead(n.Id)">
+                            <i class="bi @n.TypeIcon me-2"></i>
+                            <span class="small d-block text-truncate">@n.Message</span>
+                            <small class="text-muted">@n.CreatedAt.ToString("MMM dd, HH:mm")</small>
+                        </a>
+                    </li>
+                }
+                <li><hr class="dropdown-divider" /></li>
+                <li>
+                    <a class="dropdown-item text-center small text-primary" href="/notifications">
+                        View all notifications
+                    </a>
+                </li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid CurrentUserId { get; set; }
+
+    private List<Notification> _recent = new();
+    private int UnreadCount => NotificationService.GetUnreadCount(CurrentUserId);
+
+    protected override void OnInitialized()
+    {
+        // Subscribe to event — component re-renders reactively when notification arrives
+        NotificationService.OnNewNotification += HandleNewNotification;
+        LoadNotifications();
+    }
+
+    private void LoadNotifications()
+    {
+        _recent = NotificationService
+            .GetNotificationsForUser(CurrentUserId)
+            .Take(5)
+            .ToList();
+    }
+
+    private void HandleNewNotification(Notification notification)
+    {
+        if (notification.UserId == CurrentUserId)
+        {
+            LoadNotifications();
+            // Reactive re-render — tells Blazor the state has changed
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void MarkRead(Guid id)
+    {
+        NotificationService.MarkAsRead(id);
+        LoadNotifications();
+    }
+
+    // IDisposable: unsubscribe from event to prevent memory leaks
+    public void Dispose()
+    {
+        NotificationService.OnNewNotification -= HandleNewNotification;
+    }
+}

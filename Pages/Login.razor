@@ -1,0 +1,112 @@
+@page "/login"
+@using EduConnect.Services
+@using EduConnect.Components
+@using EduConnect.Enums
+@inject AuthStateService AuthService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<!-- Login.razor — Public login page -->
+<!-- Demonstrates: Two-way binding on form fields, event-driven login -->
+
+<PageTitle>EduConnect — Login</PageTitle>
+
+<div class="min-vh-100 d-flex align-items-center justify-content-center bg-light">
+    <div class="col-12 col-sm-8 col-md-5 col-lg-4">
+        <div class="card shadow-lg border-0 rounded-4">
+            <div class="card-body p-5">
+                <div class="text-center mb-4">
+                    <i class="bi bi-mortarboard-fill text-primary" style="font-size:3rem;"></i>
+                    <h3 class="fw-bold mt-2">EduConnect</h3>
+                    <p class="text-muted small">University Academic Portal</p>
+                </div>
+
+                <AlertBox Message="@_errorMessage" Type="AlertType.Error"
+                          OnDismissed="@(() => _errorMessage = string.Empty)" />
+
+                <div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Email Address</label>
+                        <!-- Two-way binding: @bind keeps _email in sync with the input -->
+                        <input type="email" class="form-control" placeholder="your@email.com"
+                               @bind="_email" @bind:event="oninput" @onkeydown="HandleEnter" />
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Password</label>
+                        <input type="password" class="form-control" placeholder="••••••••"
+                               @bind="_password" @bind:event="oninput" @onkeydown="HandleEnter" />
+                    </div>
+
+                    <button class="btn btn-primary w-100 py-2 fw-semibold"
+                            @onclick="HandleLogin" disabled="@_isLoading">
+                        @if (_isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        <i class="bi bi-box-arrow-in-right me-1"></i>Sign In
+                    </button>
+                </div>
+
+                <hr class="my-4" />
+                <p class="text-muted small text-center mb-2 fw-semibold">Demo Accounts</p>
+                <div class="d-flex flex-column gap-1">
+                    <button class="btn btn-outline-danger btn-sm" @onclick='() => FillCredentials("admin@edu.com","admin123")'>
+                        <i class="bi bi-shield me-1"></i>Admin
+                    </button>
+                    <button class="btn btn-outline-warning btn-sm" @onclick='() => FillCredentials("faculty@edu.com","faculty123")'>
+                        <i class="bi bi-person-workspace me-1"></i>Faculty (Dr. John Doe)
+                    </button>
+                    <button class="btn btn-outline-success btn-sm" @onclick='() => FillCredentials("alice@edu.com","student123")'>
+                        <i class="bi bi-mortarboard me-1"></i>Student (Alice)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _email    = string.Empty;
+    private string _password = string.Empty;
+    private string _errorMessage = string.Empty;
+    private bool _isLoading = false;
+
+    protected override void OnInitialized()
+    {
+        // Redirect if already logged in
+        if (AuthService.IsAuthenticated)
+            Nav.NavigateTo("/dashboard");
+    }
+
+    private async Task HandleLogin()
+    {
+        _errorMessage = string.Empty;
+        if (string.IsNullOrWhiteSpace(_email) || string.IsNullOrWhiteSpace(_password))
+        {
+            _errorMessage = "Please enter your email and password.";
+            return;
+        }
+
+        _isLoading = true;
+        await Task.Delay(400); // Simulate async auth
+
+        bool success = AuthService.Login(_email, _password);
+        _isLoading = false;
+
+        if (success)
+            Nav.NavigateTo("/dashboard");
+        else
+            _errorMessage = "Invalid email or password. Try the demo accounts below.";
+    }
+
+    private void FillCredentials(string email, string password)
+    {
+        _email    = email;
+        _password = password;
+    }
+
+    private async Task HandleEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await HandleLogin();
+    }
+}

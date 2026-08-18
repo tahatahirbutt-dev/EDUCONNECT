@@ -1,0 +1,79 @@
+/* EduConnect — app.css */
+
+html, body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+}
+
+/* Smooth navbar brand */
+.navbar-brand {
+    letter-spacing: 0.5px;
+}
+
+/* Card hover lift effect */
+.card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.1) !important;
+}
+
+/* Tighter table rows */
+.table td, .table th {
+    vertical-align: middle;
+}
+
+/* Form focus glow */
+.form-control:focus, .form-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+/* Grade row colors — applied by GradeRecord.RowCssClass */
+.table-success td { background-color: #d1e7dd !important; }
+.table-warning td { background-color: #fff3cd !important; }
+.table-danger  td { background-color: #f8d7da !important; }
+
+/* Notification bell pulse */
+@keyframes bell-pulse {
+    0%   { transform: rotate(0deg); }
+    10%  { transform: rotate(15deg); }
+    20%  { transform: rotate(-15deg); }
+    30%  { transform: rotate(10deg); }
+    40%  { transform: rotate(-10deg); }
+    50%  { transform: rotate(0deg); }
+    100% { transform: rotate(0deg); }
+}
+.bell-animate {
+    animation: bell-pulse 1s ease;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .container-fluid {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    h2 { font-size: 1.4rem; }
+}
+
+/* Login page gradient */
+.bg-login {
+    background: linear-gradient(135deg, #0d6efd 0%, #198754 100%);
+}
+
+/* Progress bar transition */
+.progress-bar {
+    transition: width 0.4s ease;
+}
+
+/* Badge font weight */
+.badge { font-weight: 600; }
+
+/* Sticky table header */
+.table-responsive thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}

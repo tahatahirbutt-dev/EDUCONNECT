@@ -1,0 +1,82 @@
+@page "/courses"
+@using EduConnect.Services
+@using EduConnect.Interfaces
+@using EduConnect.Enums
+@using EduConnect.Components
+@inject AuthStateService AuthService
+@inject ICourseService CourseService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Course Catalog — EduConnect</PageTitle>
+
+@if (!AuthService.IsAuthenticated) { Nav.NavigateTo("/login"); return; }
+
+<div class="mb-4">
+    <h2 class="fw-bold mb-0"><i class="bi bi-collection-fill me-2 text-success"></i>Course Catalog</h2>
+    <p class="text-muted small">All available courses — @_courses.Count total</p>
+</div>
+
+<!-- Filter bar -->
+<div class="row g-2 mb-4">
+    <div class="col-md-5">
+        <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" placeholder="Search courses..."
+                   @bind="_searchTerm" @bind:event="oninput" />
+        </div>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" @bind="_filterStatus">
+            <option value="">All Statuses</option>
+            <option value="Open">Open</option>
+            <option value="AlmostFull">Almost Full</option>
+            <option value="Full">Full</option>
+        </select>
+    </div>
+</div>
+
+<div class="row g-4">
+    @foreach (var course in FilteredCourses)
+    {
+        <div class="col-md-6 col-lg-4">
+            <CourseCard Course="@course"
+                        ShowEnrollButton="@(AuthService.IsInRole(UserRole.Student))"
+                        OnEnroll="@HandleEnroll" />
+        </div>
+    }
+    @if (!FilteredCourses.Any())
+    {
+        <div class="col-12 text-center text-muted py-5">
+            <i class="bi bi-inbox fs-1 d-block mb-2"></i>No courses match your filter.
+        </div>
+    }
+</div>
+
+<AlertBox Message="@_msg" Type="@_msgType" OnDismissed="@(() => _msg = string.Empty)" />
+
+@code {
+    private List<EduConnect.Models.Course> _courses = new();
+    private string _searchTerm   = string.Empty;
+    private string _filterStatus = string.Empty;
+    private string _msg    = string.Empty;
+    private AlertType _msgType = AlertType.Info;
+
+    protected override void OnInitialized()
+    {
+        _courses = CourseService.GetAll().ToList();
+    }
+
+    private IEnumerable<EduConnect.Models.Course> FilteredCourses =>
+        _courses.Where(c =>
+            (string.IsNullOrWhiteSpace(_searchTerm) ||
+             c.Title.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ||
+             c.Code.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(_filterStatus) ||
+             c.EnrollmentStatus.ToString() == _filterStatus));
+
+    private void HandleEnroll(EduConnect.Models.Course course)
+    {
+        Nav.NavigateTo("/student/enroll");
+    }
+}

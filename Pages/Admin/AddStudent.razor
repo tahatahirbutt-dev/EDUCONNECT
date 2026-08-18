@@ -1,0 +1,115 @@
+@page "/admin/students/add"
+@using EduConnect.Services
+@using EduConnect.Interfaces
+@using EduConnect.Models
+@using EduConnect.Enums
+@using EduConnect.Components
+@inject AuthStateService AuthService
+@inject IStudentService StudentService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Add Student — EduConnect</PageTitle>
+
+@if (!AuthService.IsInRole(UserRole.Admin)) { Nav.NavigateTo("/unauthorized"); return; }
+
+<div class="d-flex align-items-center mb-4 gap-3">
+    <a href="/admin/students" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+    <div>
+        <h2 class="fw-bold mb-0"><i class="bi bi-person-plus-fill me-2 text-primary"></i>Add New Student</h2>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-7">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <AlertBox Message="@_errorMsg" Type="AlertType.Error" OnDismissed="@(() => _errorMsg = string.Empty)" />
+
+                <!-- Two-way binding on all form fields using @bind -->
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Full Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control @ErrorClass("FullName")"
+                           placeholder="e.g. Sarah Connor"
+                           @bind="_student.FullName" @bind:event="oninput" />
+                    <ValidationMsg Field="FullName" Errors="_student.ValidationErrors" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Email Address <span class="text-danger">*</span></label>
+                    <input type="email" class="form-control @ErrorClass("Email")"
+                           placeholder="student@edu.com"
+                           @bind="_student.Email" @bind:event="oninput" />
+                    <ValidationMsg Field="Email" Errors="_student.ValidationErrors" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Password <span class="text-danger">*</span></label>
+                    <input type="password" class="form-control @ErrorClass("Password")"
+                           placeholder="Minimum 6 characters"
+                           @bind="_student.Password" @bind:event="oninput" />
+                    <ValidationMsg Field="Password" Errors="_student.ValidationErrors" />
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-semibold">Semester <span class="text-danger">*</span></label>
+                        <!-- Two-way binding on dropdown with @bind -->
+                        <select class="form-select @ErrorClass("Semester")" @bind="_student.Semester">
+                            @for (int i = 1; i <= 8; i++)
+                            {
+                                <option value="@i">Semester @i</option>
+                            }
+                        </select>
+                        <ValidationMsg Field="Semester" Errors="_student.ValidationErrors" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-semibold">Initial CGPA</label>
+                        <input type="number" class="form-control @ErrorClass("CGPA")"
+                               min="0" max="4" step="0.01" placeholder="0.00"
+                               @bind="_student.CGPA" />
+                        <ValidationMsg Field="CGPA" Errors="_student.ValidationErrors" />
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2 mt-3">
+                    <button class="btn btn-primary px-4" @onclick="HandleSubmit" disabled="@_isLoading">
+                        @if (_isLoading) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                        <i class="bi bi-check-lg me-1"></i>Add Student
+                    </button>
+                    <a href="/admin/students" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly Student _student = new();
+    private string _errorMsg = string.Empty;
+    private bool _isLoading = false;
+
+    private async Task HandleSubmit()
+    {
+        if (!_student.Validate())
+            return;
+
+        // Check duplicate email
+        if (StudentService.GetAll().Any(s => s.Email.Equals(_student.Email, StringComparison.OrdinalIgnoreCase)))
+        {
+            _errorMsg = "A student with this email already exists.";
+            return;
+        }
+
+        _isLoading = true;
+        await Task.Delay(300);
+        StudentService.Add(_student);
+        _isLoading = false;
+        Nav.NavigateTo("/admin/students");
+    }
+
+    private string ErrorClass(string field) =>
+        _student.ValidationErrors.ContainsKey(field) ? "is-invalid" : string.Empty;
+}

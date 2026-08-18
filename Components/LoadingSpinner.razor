@@ -1,0 +1,22 @@
+<!-- LoadingSpinner.razor — Bootstrap spinner for async operations -->
+<!-- Wrap async operations with this component using IsLoading parameter -->
+
+@if (IsLoading)
+{
+    <div class="d-flex justify-content-center align-items-center py-5">
+        <div class="spinner-border text-primary me-3" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <span class="text-muted">@Label</span>
+    </div>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter] public bool IsLoading { get; set; } = false;
+    [Parameter] public string Label { get; set; } = "Loading...";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

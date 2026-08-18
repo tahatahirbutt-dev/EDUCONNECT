@@ -1,0 +1,12 @@
+<!-- ValidationMsg.razor — Inline validation error message under form fields -->
+@if (Errors.TryGetValue(Field, out var msg))
+{
+    <div class="invalid-feedback d-block">
+        <i class="bi bi-exclamation-circle me-1"></i>@msg
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Field { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public Dictionary<string, string> Errors { get; set; } = new();
+}
